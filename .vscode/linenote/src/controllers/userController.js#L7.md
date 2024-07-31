@@ -1,0 +1,13 @@
+CRUD OPERATION FOR PRODUCT:
+
+1 - CREATE ✅
+2 - DELETE ❌
+3 - UPDATE ❌
+4 - READ   ❌
+--------------
+CRUD OPERATION FOR CATEGORY:
+
+1 - CREATE ✅
+2 - DELETE ❌
+3 - UPDATE ❌
+4 - READ   ❌
