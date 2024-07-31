@@ -46,6 +46,9 @@ router.post('/v1/create-product', async (req, res) => {
                     categoryId,
                 },
             });
+            if (!newProduct){
+                return res.status(400).json({ message: 'Product cant be create'});
+            }
             return res.status(201).json({ message: 'Product created successfully', product: newProduct });
         }
 
@@ -72,8 +75,14 @@ router.put('/v1/update-product/:id' , async(req , res) => {
         categoryId = parseInt(categoryId);
         stock = parseInt(stock);
         price = parseFloat(price);
+
+        let existingCategory = await prisma.category.findUnique({
+            where: {id : categoryId}
+        });
+        if (!existingCategory){
+            return res.status(404).json({message : `this category id ${categoryId} not found to update the product`})
+        }
         
-    
         let existingProduct = await prisma.product.findUnique({
             where : {id : id},
         });
@@ -90,9 +99,11 @@ router.put('/v1/update-product/:id' , async(req , res) => {
                     categoryId: categoryId,
             }
         });
-        if(updatedProduct){
-            return res.status(200).json({ message: 'Product updated successfully', product: updatedProduct });
+        if(!updatedProduct){
+            return res.status(400).json({ message: 'Product cant be updated'});
         }
+        return res.status(200).json({ message: 'Product updated successfully', product: updatedProduct });
+
     } catch (error) {
         console.log(error);
         res.status(500).send('Server error');
