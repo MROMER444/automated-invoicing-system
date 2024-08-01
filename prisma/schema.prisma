@@ -13,6 +13,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  Admin
+  client
+}
 
 model User {
   id        Int      @id @default(autoincrement())
@@ -21,21 +25,22 @@ model User {
   password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  address   String   @default("")
   orders    Order[]
-  addresses Address[]
   reviews   Review[]
+  role      Role     @default(client)
 }
 
 model Product {
-  id          Int       @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   name        String
   description String
   price       Float
   stock       Int
   categoryId  Int
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  category    Category  @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  category    Category    @relation(fields: [categoryId], references: [id])
   orderItems  OrderItem[]
   reviews     Review[]
 }
@@ -50,15 +55,15 @@ model Category {
 }
 
 model Order {
-  id         Int       @id @default(autoincrement())
-  userId     Int
+  id          Int         @id @default(autoincrement())
+  userId      Int
   totalAmount Float
-  status     String
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  user       User      @relation(fields: [userId], references: [id])
-  orderItems OrderItem[]
-  payments   Payment[]
+  status      String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  user        User        @relation(fields: [userId], references: [id])
+  orderItems  OrderItem[]
+  payments    Payment[]
 }
 
 model OrderItem {
@@ -71,20 +76,6 @@ model OrderItem {
   updatedAt DateTime @updatedAt
   order     Order    @relation(fields: [orderId], references: [id])
   product   Product  @relation(fields: [productId], references: [id])
-}
-
-model Address {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  addressLine1 String
-  addressLine2 String?
-  city         String
-  state        String
-  postalCode   String
-  country      String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id])
 }
 
 model Review {
@@ -100,12 +91,12 @@ model Review {
 }
 
 model Payment {
-  id           Int      @id @default(autoincrement())
-  orderId      Int
+  id            Int      @id @default(autoincrement())
+  orderId       Int
   paymentMethod String
   paymentStatus String
-  amount       Float
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  order        Order    @relation(fields: [orderId], references: [id])
+  amount        Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  order         Order    @relation(fields: [orderId], references: [id])
 }
