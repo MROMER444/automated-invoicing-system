@@ -2,7 +2,10 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const jwt = require("jsonwebtoken");
 const Joi = require("joi");
+
+const AuthCheck = require("../auth/user_auth");
 
 router.post('/v1/create-category', async (req, res) => {
     try {
@@ -72,13 +75,20 @@ router.put('/v1/update-category/:id' , async(req , res) => {
 
 });
 
-router.get('/v1/get-categories', async (req, res) => {
+router.get('/v1/get-categories', AuthCheck , async (req, res) => {
     try {
+        const token = req.headers['x-auth-token'];
+        if(!token){
+            return res.status(404).json({message: 'there is no token!'});
+        }
+        const decodeToken = jwt.decode(token);
+        console.log(decodeToken.id);
         let category = await prisma.category.findMany();
         if (category.length === 0) {
             return res.status(200).json({ message: 'There are no category' });
         } else {
             return res.status(200).json({ categories: category });
+            
         }
     } catch (error) {
         console.log(error);

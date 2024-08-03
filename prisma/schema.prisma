@@ -18,6 +18,16 @@ enum Role {
   client
 }
 
+enum PaymentMethod {
+  MasterCard
+  VisaCard
+}
+
+enum paymentStatus {
+  Completed
+  Failed
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   name      String
@@ -29,6 +39,7 @@ model User {
   orders    Order[]
   reviews   Review[]
   role      Role     @default(client)
+  Payment Payment[]
 }
 
 model Product {
@@ -58,12 +69,12 @@ model Order {
   id          Int         @id @default(autoincrement())
   userId      Int
   totalAmount Float
+  paymentstatus paymentStatus
   status      String
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   user        User        @relation(fields: [userId], references: [id])
   orderItems  OrderItem[]
-  payments    Payment[]
 }
 
 model OrderItem {
@@ -92,11 +103,11 @@ model Review {
 
 model Payment {
   id            Int      @id @default(autoincrement())
-  orderId       Int
+  userId        Int
   paymentMethod String
-  paymentStatus String
   amount        Float
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  order         Order    @relation(fields: [orderId], references: [id])
+  user          User @relation(fields: [userId], references: [id])
 }
+
