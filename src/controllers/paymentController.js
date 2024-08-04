@@ -124,8 +124,6 @@ router.delete('/v1/delete-payment/:id', async (req, res) => {
 });
 
 
-
-
 function paymmentvalidation(payment) {
     const schema = Joi.object({
         paymentMethod: Joi.valid('MasterCard' , 'VisaCard').required(),
