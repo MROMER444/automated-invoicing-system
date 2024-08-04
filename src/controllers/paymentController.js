@@ -49,10 +49,6 @@ router.post('/v1/connect-payment' , async (req , res) => {
 });
 
 
-
-
-
-
 router.get('/v1/get-all-payment' , async (req , res) => {
     try {
         payment = await prisma.payment.findMany();
@@ -65,11 +61,23 @@ router.get('/v1/get-all-payment' , async (req , res) => {
     }
 })
 
-
-
-
-
-
+router.get('/v1/get-paymentById/:id' , async (req , res) => {
+    try {
+        const token = req.headers['x-auth-token'];
+        const decodeToken = jwt.decode(token);
+        
+        const payment = await prisma.payment.findFirst({
+            where: {userId : decodeToken.id}
+        });
+        if(!payment || payment.length === 0) {
+            res.status(200).json({"payment" : []})
+        }
+        res.status(200).json({"payment" : payment})
+        
+    } catch (error) {
+        res.status(500).send('Server error');
+    }
+})
 
 
 
