@@ -46,9 +46,33 @@ router.post('/v1/connect-payment' , async (req , res) => {
         res.status(500).send('Server error');
 
     }
+});
 
 
+
+
+
+
+router.get('/v1/get-all-payment' , async (req , res) => {
+    try {
+        payment = await prisma.payment.findMany();
+        if(payment.length === 0){
+            res.status(404).json({payments : []})
+        }
+        res.status(404).json({payments : payment})
+    } catch (error) {
+        res.status(500).send('Server error');
+    }
 })
+
+
+
+
+
+
+
+
+
 
 
 
