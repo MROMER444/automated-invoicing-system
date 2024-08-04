@@ -36,14 +36,14 @@ router.post('/v1/connect-payment' , async (req , res) => {
             }
         });
         if(!newpayment){
-            res.status(400).json({message : "can't create payment"});
+            return res.status(400).json({message : "can't create payment"});
         }
-        res.status(201).json({"payment" : newpayment});
+        return res.status(201).json({"payment" : newpayment});
     }
-    res.status(400).json({message : "you already has a payment profile"})
+    return res.status(400).json({message : "you already has a payment profile"})
     } catch (error) {
         console.log(error);
-        res.status(500).send('Server error');
+        return res.status(500).send('Server error');
 
     }
 });
@@ -53,37 +53,75 @@ router.get('/v1/get-all-payment' , async (req , res) => {
     try {
         payment = await prisma.payment.findMany();
         if(payment.length === 0){
-            res.status(404).json({payments : []})
+            return res.status(404).json({payments : []})
         }
-        res.status(404).json({payments : payment})
+        return res.status(404).json({payments : payment})
     } catch (error) {
-        res.status(500).send('Server error');
+        return res.status(500).send('Server error');
     }
-})
+});
 
-router.get('/v1/get-paymentById/:id' , async (req , res) => {
+
+router.get('/v1/get-paymentById/:id', async (req, res) => {
     try {
         const token = req.headers['x-auth-token'];
-        const decodeToken = jwt.decode(token);
-        
-        const payment = await prisma.payment.findFirst({
-            where: {userId : decodeToken.id}
-        });
-        if(!payment || payment.length === 0) {
-            res.status(200).json({"payment" : []})
+        if (!token) {
+            return res.status(401).json({ message: 'No token provided!' });
         }
-        res.status(200).json({"payment" : payment})
-        
+
+        const decodeToken = jwt.decode(token);
+        if (!decodeToken || !decodeToken.id) {
+            return res.status(401).json({ message: 'Invalid token!' });
+        }
+
+        const payment = await prisma.payment.findFirst({
+            where: { userId: decodeToken.id }
+        });
+
+        if (!payment) {
+            return res.status(200).json({ "payment": [] });
+        }
+
+        return res.status(200).json({ "payment": payment });
+
     } catch (error) {
-        res.status(500).send('Server error');
+        console.log(error);
+        return res.status(500).send('Server error');
     }
-})
+});
 
 
+router.delete('/v1/delete-payment/:id', async (req, res) => {
+    try {
+        const token = req.headers['x-auth-token'];
+        if (!token) {
+            return res.status(401).json({ message: 'No token provided!' });
+        }
 
+        const decodeToken = jwt.decode(token);
+        if (!decodeToken || !decodeToken.id) {
+            return res.status(401).json({ message: 'Invalid token!' });
+        }
 
+        const payment = await prisma.payment.findFirst({
+            where: { userId: decodeToken.id }
+        });
 
+        if (!payment) {
+            return res.status(404).json({ message: 'There is no payment profile to delete!' });
+        }
 
+        await prisma.payment.delete({
+            where: { id: payment.id }
+        });
+
+        return res.status(200).json({ message: 'Payment profile deleted successfully!' });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send('Server error');
+    }
+});
 
 
 
