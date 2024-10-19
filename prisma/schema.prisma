@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,101 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  Admin
-  client
+model sp_monthly_rev_data {
+  id             Int    @id @default(autoincrement())
+  SP_Name        String
+  Service_Name   String
+  ShortCode      Int
+  Opt_In         Int
+  Opt_Out        Int
+  Out_Of_Balance Int
+  Charged_Units  Int
+  Total_Revenue  String
+  Date           String
+  Tariff         String
+
+  // Zain_share   Float?
+  // Bawaba_share Float?
+
+  revShareId Int?
+  revShare   rev_share? @relation(fields: [revShareId], references: [id]) // Optional relation
 }
 
-enum PaymentMethod {
-  MasterCard
-  VisaCard
-}
+model rev_share {
+  id           Int   @id @default(autoincrement())
+  Zain_share   Float @default(0)
+  Bawaba_share Float @default(0)
 
-enum paymentStatus {
-  Completed
-  Failed
+  spMonthlyRevData sp_monthly_rev_data[] // One-to-many relation with sp_monthly_rev_data
 }
-
-model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  address   String   @default("")
-  orders    Order[]
-  reviews   Review[]
-  role      Role     @default(client)
-  Payment Payment[]
-}
-
-model Product {
-  id          Int         @id @default(autoincrement())
-  name        String
-  description String
-  price       Float
-  stock       Int
-  categoryId  Int
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  category    Category    @relation(fields: [categoryId], references: [id])
-  orderItems  OrderItem[]
-  reviews     Review[]
-}
-
-model Category {
-  id          Int       @id @default(autoincrement())
-  name        String
-  description String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  products    Product[]
-}
-
-model Order {
-  id          Int         @id @default(autoincrement())
-  userId      Int
-  totalAmount Float
-  paymentstatus paymentStatus
-  status      String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  user        User        @relation(fields: [userId], references: [id])
-  orderItems  OrderItem[]
-}
-
-model OrderItem {
-  id        Int      @id @default(autoincrement())
-  orderId   Int
-  productId Int
-  quantity  Int
-  price     Float
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  order     Order    @relation(fields: [orderId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
-}
-
-model Review {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  productId Int
-  rating    Int
-  comment   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
-}
-
-model Payment {
-  id            Int      @id @default(autoincrement())
-  userId        Int
-  paymentMethod String
-  amount        Float
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  user          User @relation(fields: [userId], references: [id])
-}
-
