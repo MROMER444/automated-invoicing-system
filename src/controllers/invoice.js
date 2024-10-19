@@ -102,9 +102,15 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       return sum + parseFloat(item.Bawaba_RS_Amount.replace(/,/g, ""));
     }, 0);
 
-    console.log("Total Bawaba_RS_Amount:", totalBawabaRSAmount.toFixed(2));
+    const formattedTotalBawabaRSAmount = totalBawabaRSAmount.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
-    res.status(200).json({ data: result });
+    res.status(200).json({
+      data: result,
+      "Total Bawaba_RS_Amount": formattedTotalBawabaRSAmount,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "An error occurred while fetching data." });

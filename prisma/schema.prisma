@@ -29,8 +29,8 @@ model sp_monthly_rev_data {
 
 model rev_share {
   id           Int   @id @default(autoincrement())
-  Zain_share   Float @default(0)
-  Bawaba_share Float @default(0)
+  Zain_share   Float
+  Bawaba_share Float
 
-  spMonthlyRevData sp_monthly_rev_data[] // One-to-many relation with sp_monthly_rev_data
+  spMonthlyRevData sp_monthly_rev_data[]
 }
