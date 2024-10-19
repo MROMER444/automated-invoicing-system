@@ -109,7 +109,7 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
 
     res.status(200).json({
       data: result,
-      "Total Bawaba_RS_Amount": formattedTotalBawabaRSAmount,
+      "Total_Bawaba_Revenue": formattedTotalBawabaRSAmount,
     });
   } catch (error) {
     console.error(error);
