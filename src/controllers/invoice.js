@@ -2,6 +2,12 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const ExcelJS = require("exceljs");
+const path = require("path");
+const fs = require("fs");
+const bodyParser = require("body-parser");
+const csv = require("csv-parser");
+router.use(bodyParser.json());
 
 const formatAccounting = (value) => {
   return parseFloat(value || 0).toLocaleString("en-US", {
@@ -10,29 +16,8 @@ const formatAccounting = (value) => {
   });
 };
 
-router.get("/v1/get_data", async (req, res) => {
-  try {
-    const report = await prisma.sp_monthly_rev_data.findMany();
-    res.status(200).json({ data: report });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "An error occurred while fetching data." });
-  }
-});
-
-router.get("/v1/rev_share", async (req, res) => {
-  try {
-    const rev_share = await prisma.rev_share.findMany();
-    res.status(200).json({ rev_share: rev_share });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "An error occurred while fetching data." });
-  }
-});
-
 router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
   try {
-    // Fetch data from sp_monthly_rev_data along with rev_share values
     const data = await prisma.sp_monthly_rev_data.findMany({
       select: {
         id: true,
@@ -57,7 +42,7 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       const { id, SP_Name, Service_Name, Total_Revenue, Tariff, ShortCode, revShare } =
         item;
 
-      const revenue = parseFloat(Total_Revenue.replace(/[^0-9.-]+/g, "") || 0); // Handle string values like '0'
+      const revenue = parseFloat(Total_Revenue.replace(/[^0-9.-]+/g, "") || 0);
 
       const key = `${SP_Name}-${Service_Name}`;
 
@@ -71,27 +56,24 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
           Gross_Revenue: 0,
           Net_Revenue: 0,
           Tax_Amount: 0,
-          Zain_share: revShare?.Zain_share ?? 0.3, // Use value from revShare if available, default if not
-          Bawaba_share: revShare?.Bawaba_share ?? 0.7, // Use value from revShare if available, default if not
+          Zain_share: revShare?.Zain_share ?? 0.3,
+          Bawaba_share: revShare?.Bawaba_share ?? 0.7,
           Zain_RS_Amount: 0,
           Bawaba_RS_Amount: 0,
         };
       }
 
-      // Update revenue data for each entry
       revenueMap[key].Gross_Revenue += revenue;
-      revenueMap[key].Tax_Amount = revenueMap[key].Gross_Revenue * 0.195; // 19.5% tax
+      revenueMap[key].Tax_Amount = revenueMap[key].Gross_Revenue * 0.195;
       revenueMap[key].Net_Revenue =
         revenueMap[key].Gross_Revenue - revenueMap[key].Tax_Amount;
 
-      // Revenue Share calculations
       revenueMap[key].Zain_RS_Amount =
         revenueMap[key].Net_Revenue * revenueMap[key].Zain_share;
       revenueMap[key].Bawaba_RS_Amount =
         revenueMap[key].Net_Revenue * revenueMap[key].Bawaba_share;
     });
 
-    // Convert revenueMap to final result array
     const result = Object.values(revenueMap).map((entry) => ({
       id: entry.id,
       SP_Name: entry.SP_Name,
@@ -108,24 +90,121 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       Bawaba_RS_Amount: formatAccounting(entry.Bawaba_RS_Amount),
     }));
 
-    // Calculate total Bawaba revenue share amount
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Revenue Data");
+
+    worksheet.columns = [
+      { header: "ID", key: "id", width: 10 },
+      { header: "SP Name", key: "SP_Name", width: 20 },
+      { header: "Service Name", key: "Service_Name", width: 20 },
+      { header: "Tariff", key: "Tariff", width: 15 },
+      { header: "Short Code", key: "ShortCode", width: 15 },
+      { header: "Gross Revenue", key: "Gross_Revenue", width: 20 },
+      { header: "Net Revenue", key: "Net_Revenue", width: 20 },
+      { header: "Tax Amount", key: "Tax_Amount", width: 15 },
+      { header: "Tax Percentage", key: "Tax_Percentage", width: 15 },
+      { header: "Zain Share", key: "Zain_share", width: 15 },
+      { header: "Bawaba Share", key: "Bawaba_share", width: 15 },
+      { header: "Zain RS Amount", key: "Zain_RS_Amount", width: 20 },
+      { header: "Bawaba RS Amount", key: "Bawaba_RS_Amount", width: 20 },
+    ];
+
+    worksheet.addRows(result);
+
     const totalBawabaRSAmount = result.reduce((sum, item) => {
-      return sum + parseFloat(item.Bawaba_RS_Amount.replace(/,/g, "")); // Remove commas for accurate sum
+      return sum + parseFloat(item.Bawaba_RS_Amount.replace(/,/g, ""));
     }, 0);
 
-    // Format total Bawaba revenue share
-    const formattedTotalBawabaRSAmount = totalBawabaRSAmount.toLocaleString("en-US", {
+    const TotalBawabaRSAmount = totalBawabaRSAmount.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
 
+    const filePath = path.join(
+      __dirname,
+      "../downloads",
+      `Revenue_Report_${new Date().toISOString()}.xlsx`
+    );
+    await workbook.xlsx.writeFile(filePath);
+
     res.status(200).json({
+      message: "Excel file generated and saved successfully.",
+      path: filePath,
       data: result,
-      Total_Bawaba_Revenue: formattedTotalBawabaRSAmount,
+      BawabaRSAmount: TotalBawabaRSAmount,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "An error occurred while fetching data." });
+    res.status(500).json({ error: "An error occurred while generating the report." });
+  }
+});
+
+router.get("/v1/get-total_services", async (req, res) => {
+  try {
+    const services = await prisma.rev_share.findMany({
+      select: {
+        Service_Name: true,
+      },
+    });
+
+    const uniqueServices = new Set(services.map((service) => service.Service_Name));
+    const total_services = uniqueServices.size;
+
+    res.status(200).json({ total_services });
+  } catch (error) {
+    console.error("Error fetching total services:", error);
+    res.status(500).json({ error: "Error fetching total services" });
+  }
+});
+
+router.post("/v1/upload-csv", async (req, res) => {
+  const results = [];
+
+  // Read the CSV file and parse it
+  fs.createReadStream(
+    "/Users/omer/Documents/my_pro/automated invoicing system/Aug-revcsv4444444.csv"
+  ) // Replace with the actual path to your CSV
+    .pipe(csv())
+    .on("data", (data) => results.push(data))
+    .on("end", async () => {
+      try {
+        // Insert each row from CSV into the database
+        for (const row of results) {
+          await prisma.sp_monthly_rev_data.create({
+            data: {
+              SP_Name: row["SP Name"],
+              Service_Name: row["Service Name"],
+              Tariff: row["Tariff"],
+              ShortCode: parseInt(row["Short Code"]),
+              Opt_In: parseInt(row["Opt-In"]),
+              Opt_Out: parseInt(row["Opt-Out"]),
+              Out_Of_Balance: parseInt(row["Out Of Balance"]),
+              Charged_Units: parseInt(row["Charged Units"]),
+              Total_Revenue: row["Total Revenue"], // Clean up currency format
+              Date: Date(row["Date"]),
+            },
+          });
+        }
+        res.status(200).json({ message: "CSV data inserted successfully!" });
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error inserting data", error });
+      }
+    });
+});
+
+router.get("/v1/getshare", async (req, res) => {
+  const { skip = 0, take = 4 } = req.query; // Default values for pagination
+  try {
+    const total_services2 = await prisma.rev_share.findMany({
+      skip: Number(skip),
+      take: Number(take),
+    });
+    const totalCount = await prisma.rev_share.count(); // Total records count
+
+    res.status(200).json({ total_services2, totalCount });
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching data" });
   }
 });
 
