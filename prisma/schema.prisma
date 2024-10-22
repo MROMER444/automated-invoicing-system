@@ -57,17 +57,11 @@ datasource db {
 // }
 
 model sp_monthly_rev_data {
-  id             Int    @id @default(autoincrement())
-  SP_Name        String
-  Service_Name   String
-  ShortCode      Int
-  Opt_In         Int
-  Opt_Out        Int
-  Out_Of_Balance Int
-  Charged_Units  Int
-  Total_Revenue  String
-  Date           String
-  Tariff         String
+  id            Int    @id @default(autoincrement())
+  SP_Name       String
+  Service_Name  String
+  Total_Revenue String
+  Date          String
 
   // Relation to rev_share based on Service_Name
   revShare rev_share? @relation(fields: [Service_Name], references: [Service_Name], onDelete: Cascade)
@@ -79,4 +73,13 @@ model rev_share {
   Zain_share          Float
   Bawaba_share        Float
   sp_monthly_rev_data sp_monthly_rev_data[]
+}
+
+model monthly_statistic {
+  id                    Int    @id @default(autoincrement())
+  Total_Gross_Revenue   Float
+  Total_Invoice_to_Zain Float
+  Total_CMC_Tax_Amount  Float
+  Zain_Net_Revenue      Float
+  Date                  String
 }

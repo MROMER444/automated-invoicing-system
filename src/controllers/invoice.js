@@ -18,31 +18,35 @@ const formatAccounting = (value) => {
 
 router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
   try {
+    // Fetch data from sp_monthly_rev_data along with rev_share values
     const data = await prisma.sp_monthly_rev_data.findMany({
       select: {
         id: true,
         SP_Name: true,
         Service_Name: true,
-        ShortCode: true,
-        Charged_Units: true,
-        Tariff: true,
         Total_Revenue: true,
+        Date: true,
         revShare: {
           select: {
-            Zain_share: true,
-            Bawaba_share: true,
+            Zain_share: true, // Fetch Zain share dynamically from the revShare table
+            Bawaba_share: true, // Fetch Bawaba share dynamically from the revShare table
           },
         },
       },
     });
 
     const revenueMap = {};
+    let totalGrossRevenue = 0; // Variable to store total gross revenue
+    let totalInvoiceToZain = 0; // Variable to accumulate Bawaba's share of the revenue (Net Bawaba)
+    let totalNetZain = 0; // Variable to accumulate the total Net Zain per service
+    let totalTax = 0; // Variable to accumulate total CMS tax across all services
 
     data.forEach((item) => {
-      const { id, SP_Name, Service_Name, Total_Revenue, Tariff, ShortCode, revShare } =
-        item;
+      const { id, SP_Name, Service_Name, Total_Revenue, revShare, Date } = item;
 
-      const revenue = parseFloat(Total_Revenue.replace(/[^0-9.-]+/g, "") || 0);
+      // Parse total revenue correctly
+      const grossRevenue = parseFloat(Total_Revenue.replace(/[^0-9.-]+/g, "") || 0);
+      totalGrossRevenue += grossRevenue; // Accumulate total gross revenue
 
       const key = `${SP_Name}-${Service_Name}`;
 
@@ -51,45 +55,60 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
           id,
           SP_Name,
           Service_Name,
-          Tariff,
-          ShortCode,
           Gross_Revenue: 0,
           Net_Revenue: 0,
-          Tax_Amount: 0,
+          CMS_Tax_Amount: 0,
+          Net_Zain: 0,
+          Net_Bawaba: 0,
+          total_Net_Zain: 0, // Add the total Net Zain field for each service
+          // Use Zain and Bawaba shares dynamically from revShare table, otherwise fallback to defaults
           Zain_share: revShare?.Zain_share ?? 0.3,
           Bawaba_share: revShare?.Bawaba_share ?? 0.7,
-          Zain_RS_Amount: 0,
-          Bawaba_RS_Amount: 0,
+          Date,
         };
       }
 
-      revenueMap[key].Gross_Revenue += revenue;
-      revenueMap[key].Tax_Amount = revenueMap[key].Gross_Revenue * 0.195;
+      // Calculate gross revenue, CMS tax (19.5%), and net revenue
+      revenueMap[key].Gross_Revenue += grossRevenue;
+      revenueMap[key].CMS_Tax_Amount = revenueMap[key].Gross_Revenue * 0.195;
       revenueMap[key].Net_Revenue =
-        revenueMap[key].Gross_Revenue - revenueMap[key].Tax_Amount;
+        revenueMap[key].Gross_Revenue - revenueMap[key].CMS_Tax_Amount;
 
-      revenueMap[key].Zain_RS_Amount =
-        revenueMap[key].Net_Revenue * revenueMap[key].Zain_share;
-      revenueMap[key].Bawaba_RS_Amount =
+      // Calculate Zain's and Bawaba's shares based on the net revenue
+      revenueMap[key].Net_Zain = revenueMap[key].Net_Revenue * revenueMap[key].Zain_share;
+      revenueMap[key].Net_Bawaba =
         revenueMap[key].Net_Revenue * revenueMap[key].Bawaba_share;
+
+      // Add up the total Net Zain for this service
+      revenueMap[key].total_Net_Zain += revenueMap[key].Net_Zain;
+
+      // Accumulate the Net Zain share for the total Net Zain
+      totalNetZain += revenueMap[key].total_Net_Zain; // Accumulate total Net Zain
+
+      // Accumulate the Net Bawaba for total invoice to Zain
+      totalInvoiceToZain += revenueMap[key].Net_Bawaba;
+
+      // Accumulate total CMS tax
+      totalTax += revenueMap[key].CMS_Tax_Amount;
     });
 
+    // Format results to return the proper accounting format
     const result = Object.values(revenueMap).map((entry) => ({
       id: entry.id,
       SP_Name: entry.SP_Name,
       Service_Name: entry.Service_Name,
-      Tariff: entry.Tariff,
-      ShortCode: entry.ShortCode,
       Gross_Revenue: formatAccounting(entry.Gross_Revenue),
       Net_Revenue: formatAccounting(entry.Net_Revenue),
-      Tax_Amount: formatAccounting(entry.Tax_Amount),
-      Tax_Percentage: "19.5%",
+      CMS_Tax_Amount: formatAccounting(entry.CMS_Tax_Amount),
+      Net_Zain: formatAccounting(entry.Net_Zain),
+      Net_Bawaba: formatAccounting(entry.Net_Bawaba),
       Zain_share: entry.Zain_share,
       Bawaba_share: entry.Bawaba_share,
-      Zain_RS_Amount: formatAccounting(entry.Zain_RS_Amount),
-      Bawaba_RS_Amount: formatAccounting(entry.Bawaba_RS_Amount),
+      total_Net_Zain: formatAccounting(entry.total_Net_Zain), // Add the total Net Zain for each service
+      Date: entry.Date,
     }));
 
+    // Save results to Excel
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Revenue Data");
 
@@ -97,28 +116,17 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       { header: "ID", key: "id", width: 10 },
       { header: "SP Name", key: "SP_Name", width: 20 },
       { header: "Service Name", key: "Service_Name", width: 20 },
-      { header: "Tariff", key: "Tariff", width: 15 },
-      { header: "Short Code", key: "ShortCode", width: 15 },
       { header: "Gross Revenue", key: "Gross_Revenue", width: 20 },
       { header: "Net Revenue", key: "Net_Revenue", width: 20 },
-      { header: "Tax Amount", key: "Tax_Amount", width: 15 },
-      { header: "Tax Percentage", key: "Tax_Percentage", width: 15 },
+      { header: "CMS Tax Amount", key: "CMS_Tax_Amount", width: 20 },
+      { header: "Net Zain", key: "Net_Zain", width: 20 },
+      { header: "Net Bawaba", key: "Net_Bawaba", width: 20 },
       { header: "Zain Share", key: "Zain_share", width: 15 },
       { header: "Bawaba Share", key: "Bawaba_share", width: 15 },
-      { header: "Zain RS Amount", key: "Zain_RS_Amount", width: 20 },
-      { header: "Bawaba RS Amount", key: "Bawaba_RS_Amount", width: 20 },
+      { header: "Total Net Zain", key: "total_Net_Zain", width: 20 }, // Add column for total Net Zain
     ];
 
     worksheet.addRows(result);
-
-    const totalBawabaRSAmount = result.reduce((sum, item) => {
-      return sum + parseFloat(item.Bawaba_RS_Amount.replace(/,/g, ""));
-    }, 0);
-
-    const TotalBawabaRSAmount = totalBawabaRSAmount.toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
 
     const filePath = path.join(
       __dirname,
@@ -127,11 +135,27 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
     );
     await workbook.xlsx.writeFile(filePath);
 
+    const reportDate = data.length > 0 ? data[0].Date : null;
+    // Save the summary statistics to the monthly_statistic table
+    await prisma.monthly_statistic.create({
+      data: {
+        Total_Gross_Revenue: totalGrossRevenue,
+        Total_Invoice_to_Zain: totalInvoiceToZain,
+        Total_CMC_Tax_Amount: totalTax,
+        Zain_Net_Revenue: totalNetZain,
+        Date: reportDate,
+      },
+    });
+
+    // Respond with data including total gross revenue, total invoice to Zain, and total tax
     res.status(200).json({
       message: "Excel file generated and saved successfully.",
       path: filePath,
       data: result,
-      BawabaRSAmount: TotalBawabaRSAmount,
+      "total Gross Revenue": formatAccounting(totalGrossRevenue), // Return total gross revenue
+      total_invoice_to_zain: formatAccounting(totalInvoiceToZain), // Return total invoice to Zain (Net Bawaba)
+      total_Net_Zain_per_all_services: formatAccounting(totalNetZain), // Return the total Net Zain for all services
+      total_tax: formatAccounting(totalTax), // Return the total CMS tax across all services
     });
   } catch (error) {
     console.error(error);
@@ -160,34 +184,60 @@ router.get("/v1/get-total_services", async (req, res) => {
 router.post("/v1/upload-csv", async (req, res) => {
   const results = [];
 
-  // Read the CSV file and parse it
   fs.createReadStream(
-    "/Users/omer/Documents/my_pro/automated invoicing system/Aug-revcsv4444444.csv"
-  ) // Replace with the actual path to your CSV
+    "/Users/omer/Documents/my_pro/automated invoicing system/Aug-revcsv_with_date.csv"
+  )
     .pipe(csv())
-    .on("data", (data) => results.push(data))
+    .on("headers", (headers) => {
+      // Clean up header names by trimming spaces
+      headers.forEach((header, index) => {
+        headers[index] = header.trim();
+      });
+    })
+    .on("data", (data) => {
+      // Clean each row's keys by trimming any extra spaces
+      const cleanedRow = {};
+      Object.keys(data).forEach((key) => {
+        cleanedRow[key.trim()] = data[key].trim();
+      });
+      results.push(cleanedRow);
+    })
     .on("end", async () => {
       try {
+        // Get the current date in the format day/month/year
+        const currentDate = new Date().toLocaleDateString("en-GB"); // "en-GB" formats it as day/month/year
+
         // Insert each row from CSV into the database
         for (const row of results) {
+          // Validate required fields
+          if (!row["SP Name"] || !row["Service name"] || !row["Total Revenue"]) {
+            console.warn("Skipping row due to missing values:", row);
+            continue;
+          }
+
+          // Check if the Service_Name exists in rev_share table
+          const serviceExists = await prisma.rev_share.findUnique({
+            where: { Service_Name: row["Service name"] },
+          });
+
+          if (!serviceExists) {
+            console.warn(`Skipping row due to missing Service_Name in rev_share:`, row);
+            continue; // Skip this row if Service_Name doesn't exist in rev_share
+          }
+
+          // Insert data if Service_Name exists
           await prisma.sp_monthly_rev_data.create({
             data: {
-              SP_Name: row["SP Name"],
-              Service_Name: row["Service Name"],
-              Tariff: row["Tariff"],
-              ShortCode: parseInt(row["Short Code"]),
-              Opt_In: parseInt(row["Opt-In"]),
-              Opt_Out: parseInt(row["Opt-Out"]),
-              Out_Of_Balance: parseInt(row["Out Of Balance"]),
-              Charged_Units: parseInt(row["Charged Units"]),
-              Total_Revenue: row["Total Revenue"], // Clean up currency format
-              Date: Date(row["Date"]),
+              SP_Name: row["SP Name"], // Trimmed and cleaned header
+              Service_Name: row["Service name"], // Cleaned
+              Total_Revenue: row["Total Revenue"].replace(/[^0-9.-]+/g, ""), // Clean currency format
+              Date: row["Date"], // Store the current date in day/month/year format
             },
           });
         }
         res.status(200).json({ message: "CSV data inserted successfully!" });
       } catch (error) {
-        console.error(error);
+        console.error("Error inserting data:", error);
         res.status(500).json({ message: "Error inserting data", error });
       }
     });
