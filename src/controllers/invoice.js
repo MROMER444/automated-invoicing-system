@@ -10,10 +10,23 @@ const csv = require("csv-parser");
 router.use(bodyParser.json());
 
 const formatAccounting = (value) => {
-  return parseFloat(value || 0).toLocaleString("en-US", {
+  let numberValue = parseFloat(value || 0);
+  let formattedValue = numberValue.toLocaleString("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
+
+  const noCommaValue = formattedValue.replace(/,/g, "");
+
+  if (noCommaValue.length > 9) {
+    const truncatedValue = Math.floor(numberValue).toString().substring(0, 9);
+    return parseInt(truncatedValue, 10).toLocaleString("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+  }
+
+  return formattedValue;
 };
 
 router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
@@ -272,5 +285,54 @@ router.get("/v1/monthly_statistic", async (req, res) => {
     res.status(500).json({ message: "Error retrieving data", error });
   }
 });
+
+router.get("/v1/filter_date", async (req, res) => {
+  const date = req.query.date;
+
+  try {
+    const statistics = await prisma.monthly_statistic.findFirst({
+      where: { Date: date },
+    });
+
+    if (!statistics) {
+      return res.status(404).json({ message: "No data found for the selected date" });
+    }
+
+    const formattedStatistic = {
+      id: statistics.id,
+      Total_Gross_Revenue: formatAccounting(statistics.Total_Gross_Revenue),
+      Total_Invoice_to_Zain: formatAccounting(statistics.Total_Invoice_to_Zain),
+      Total_CMC_Tax_Amount: formatAccounting(statistics.Total_CMC_Tax_Amount),
+      Zain_Net_Revenue: formatAccounting(statistics.Zain_Net_Revenue),
+      Date: statistics.Date,
+    };
+
+    return res.status(200).json({ monthly_statistic: formattedStatistic });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal Server Error", error });
+  }
+});
+
+router.get("/v1/monthYearOptions", async (req, res) => {
+  try {
+    // Fetch distinct dates by grouping
+    const monthYearOptions = await prisma.monthly_statistic.findMany({
+      select: {
+        Date: true,
+      },
+      distinct: ['Date'],
+    });
+
+    // Create a unique set of formatted options
+    const uniqueDates = [...new Set(monthYearOptions.map(option => option.Date))];
+
+    res.json(uniqueDates);
+  } catch (error) {
+    console.error("Error fetching month-year options:", error);
+    res.status(500).send("Server Error");
+  }
+});
+
 
 module.exports = router;
