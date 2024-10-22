@@ -18,7 +18,6 @@ const formatAccounting = (value) => {
 
 router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
   try {
-    // Fetch data from sp_monthly_rev_data along with rev_share values
     const data = await prisma.sp_monthly_rev_data.findMany({
       select: {
         id: true,
@@ -187,13 +186,11 @@ router.post("/v1/upload-csv", async (req, res) => {
   )
     .pipe(csv())
     .on("headers", (headers) => {
-      // Clean up header names by trimming spaces
       headers.forEach((header, index) => {
         headers[index] = header.trim();
       });
     })
     .on("data", (data) => {
-      // Clean each row's keys by trimming any extra spaces
       const cleanedRow = {};
       Object.keys(data).forEach((key) => {
         cleanedRow[key.trim()] = data[key].trim();
@@ -202,34 +199,29 @@ router.post("/v1/upload-csv", async (req, res) => {
     })
     .on("end", async () => {
       try {
-        // Get the current date in the format day/month/year
-        const currentDate = new Date().toLocaleDateString("en-GB"); // "en-GB" formats it as day/month/year
+        const currentDate = new Date().toLocaleDateString("en-GB");
 
-        // Insert each row from CSV into the database
         for (const row of results) {
-          // Validate required fields
           if (!row["SP Name"] || !row["Service name"] || !row["Total Revenue"]) {
             console.warn("Skipping row due to missing values:", row);
             continue;
           }
 
-          // Check if the Service_Name exists in rev_share table
           const serviceExists = await prisma.rev_share.findUnique({
             where: { Service_Name: row["Service name"] },
           });
 
           if (!serviceExists) {
             console.warn(`Skipping row due to missing Service_Name in rev_share:`, row);
-            continue; // Skip this row if Service_Name doesn't exist in rev_share
+            continue;
           }
 
-          // Insert data if Service_Name exists
           await prisma.sp_monthly_rev_data.create({
             data: {
-              SP_Name: row["SP Name"], // Trimmed and cleaned header
-              Service_Name: row["Service name"], // Cleaned
-              Total_Revenue: row["Total Revenue"].replace(/[^0-9.-]+/g, ""), // Clean currency format
-              Date: row["Date"], // Store the current date in day/month/year format
+              SP_Name: row["SP Name"],
+              Service_Name: row["Service name"],
+              Total_Revenue: row["Total Revenue"].replace(/[^0-9.-]+/g, ""),
+              Date: row["Date"],
             },
           });
         }
@@ -242,13 +234,13 @@ router.post("/v1/upload-csv", async (req, res) => {
 });
 
 router.get("/v1/getshare", async (req, res) => {
-  const { skip = 0, take = 4 } = req.query; // Default values for pagination
+  const { skip = 0, take = 4 } = req.query;
   try {
     const total_services2 = await prisma.rev_share.findMany({
       skip: Number(skip),
       take: Number(take),
     });
-    const totalCount = await prisma.rev_share.count(); // Total records count
+    const totalCount = await prisma.rev_share.count();
 
     res.status(200).json({ total_services2, totalCount });
   } catch (error) {
@@ -266,7 +258,6 @@ router.get("/v1/monthly_statistic", async (req, res) => {
 
     const lastStatistic = monthly_statistic[monthly_statistic.length - 1];
 
-    // Format the values in the response
     const formattedLastStatistic = {
       id: lastStatistic.id,
       Total_Gross_Revenue: formatAccounting(lastStatistic.Total_Gross_Revenue),

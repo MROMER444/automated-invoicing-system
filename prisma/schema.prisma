@@ -7,55 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// model sp_monthly_rev_data {
-//   id             Int    @id @default(autoincrement())
-//   SP_Name        String
-//   Service_Name   String
-//   ShortCode      Int
-//   Opt_In         Int
-//   Opt_Out        Int
-//   Out_Of_Balance Int
-//   Charged_Units  Int
-//   Total_Revenue  String
-//   Date           String
-//   Tariff         String
-
-//   // Zain_share   Float?
-//   // Bawaba_share Float?
-
-//   revShareId Int?
-//   revShare   rev_share? @relation(fields: [revShareId], references: [id]) // Optional relation
-// }
-
-// model rev_share {
-//   id           Int   @id @default(autoincrement())
-//   Zain_share   Float
-//   Bawaba_share Float
-
-//   spMonthlyRevData sp_monthly_rev_data[]
-// }
-
-// model sp_monthly_rev_data {
-//   id             Int    @id @default(autoincrement())
-//   SP_Name        String
-//   Service_Name   String
-//   ShortCode      Int
-//   Opt_In         Int
-//   Opt_Out        Int
-//   Out_Of_Balance Int
-//   Charged_Units  Int
-//   Total_Revenue  String
-//   Date           String
-//   Tariff         String
-// }
-
-// model rev_share {
-//   id           Int     @id @default(autoincrement())
-//   Service_Name String?
-//   Zain_share   Float
-//   Bawaba_share Float
-// }
-
 model sp_monthly_rev_data {
   id            Int    @id @default(autoincrement())
   SP_Name       String
@@ -63,7 +14,6 @@ model sp_monthly_rev_data {
   Total_Revenue String
   Date          String
 
-  // Relation to rev_share based on Service_Name
   revShare rev_share? @relation(fields: [Service_Name], references: [Service_Name], onDelete: Cascade)
 }
 
