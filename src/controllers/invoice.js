@@ -28,25 +28,23 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
         Date: true,
         revShare: {
           select: {
-            Zain_share: true, // Fetch Zain share dynamically from the revShare table
-            Bawaba_share: true, // Fetch Bawaba share dynamically from the revShare table
+            Zain_share: true,
+            Bawaba_share: true,
           },
         },
       },
     });
 
     const revenueMap = {};
-    let totalGrossRevenue = 0; // Variable to store total gross revenue
-    let totalInvoiceToZain = 0; // Variable to accumulate Bawaba's share of the revenue (Net Bawaba)
-    let totalNetZain = 0; // Variable to accumulate the total Net Zain per service
-    let totalTax = 0; // Variable to accumulate total CMS tax across all services
+    let totalGrossRevenue = 0;
+    let totalInvoiceToZain = 0;
+    let totalNetZain = 0;
+    let totalTax = 0;
 
     data.forEach((item) => {
       const { id, SP_Name, Service_Name, Total_Revenue, revShare, Date } = item;
-
-      // Parse total revenue correctly
       const grossRevenue = parseFloat(Total_Revenue.replace(/[^0-9.-]+/g, "") || 0);
-      totalGrossRevenue += grossRevenue; // Accumulate total gross revenue
+      totalGrossRevenue += grossRevenue;
 
       const key = `${SP_Name}-${Service_Name}`;
 
@@ -60,39 +58,27 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
           CMS_Tax_Amount: 0,
           Net_Zain: 0,
           Net_Bawaba: 0,
-          total_Net_Zain: 0, // Add the total Net Zain field for each service
-          // Use Zain and Bawaba shares dynamically from revShare table, otherwise fallback to defaults
+          total_Net_Zain: 0,
           Zain_share: revShare?.Zain_share ?? 0.3,
           Bawaba_share: revShare?.Bawaba_share ?? 0.7,
           Date,
         };
       }
 
-      // Calculate gross revenue, CMS tax (19.5%), and net revenue
       revenueMap[key].Gross_Revenue += grossRevenue;
       revenueMap[key].CMS_Tax_Amount = revenueMap[key].Gross_Revenue * 0.195;
       revenueMap[key].Net_Revenue =
         revenueMap[key].Gross_Revenue - revenueMap[key].CMS_Tax_Amount;
-
-      // Calculate Zain's and Bawaba's shares based on the net revenue
       revenueMap[key].Net_Zain = revenueMap[key].Net_Revenue * revenueMap[key].Zain_share;
       revenueMap[key].Net_Bawaba =
         revenueMap[key].Net_Revenue * revenueMap[key].Bawaba_share;
-
-      // Add up the total Net Zain for this service
       revenueMap[key].total_Net_Zain += revenueMap[key].Net_Zain;
 
-      // Accumulate the Net Zain share for the total Net Zain
-      totalNetZain += revenueMap[key].total_Net_Zain; // Accumulate total Net Zain
-
-      // Accumulate the Net Bawaba for total invoice to Zain
+      totalNetZain += revenueMap[key].total_Net_Zain;
       totalInvoiceToZain += revenueMap[key].Net_Bawaba;
-
-      // Accumulate total CMS tax
       totalTax += revenueMap[key].CMS_Tax_Amount;
     });
 
-    // Format results to return the proper accounting format
     const result = Object.values(revenueMap).map((entry) => ({
       id: entry.id,
       SP_Name: entry.SP_Name,
@@ -104,7 +90,7 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       Net_Bawaba: formatAccounting(entry.Net_Bawaba),
       Zain_share: entry.Zain_share,
       Bawaba_share: entry.Bawaba_share,
-      total_Net_Zain: formatAccounting(entry.total_Net_Zain), // Add the total Net Zain for each service
+      total_Net_Zain: formatAccounting(entry.total_Net_Zain),
       Date: entry.Date,
     }));
 
@@ -123,7 +109,7 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       { header: "Net Bawaba", key: "Net_Bawaba", width: 20 },
       { header: "Zain Share", key: "Zain_share", width: 15 },
       { header: "Bawaba Share", key: "Bawaba_share", width: 15 },
-      { header: "Total Net Zain", key: "total_Net_Zain", width: 20 }, // Add column for total Net Zain
+      { header: "Total Net Zain", key: "total_Net_Zain", width: 20 },
     ];
 
     worksheet.addRows(result);
@@ -136,26 +122,38 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
     await workbook.xlsx.writeFile(filePath);
 
     const reportDate = data.length > 0 ? data[0].Date : null;
-    // Save the summary statistics to the monthly_statistic table
-    await prisma.monthly_statistic.create({
-      data: {
-        Total_Gross_Revenue: totalGrossRevenue,
-        Total_Invoice_to_Zain: totalInvoiceToZain,
-        Total_CMC_Tax_Amount: totalTax,
-        Zain_Net_Revenue: totalNetZain,
-        Date: reportDate,
-      },
-    });
 
-    // Respond with data including total gross revenue, total invoice to Zain, and total tax
+    if (reportDate) {
+      const existingRecord = await prisma.monthly_statistic.findFirst({
+        where: { Date: reportDate },
+      });
+
+      if (!existingRecord) {
+        await prisma.monthly_statistic.create({
+          data: {
+            Total_Gross_Revenue: totalGrossRevenue,
+            Total_Invoice_to_Zain: totalInvoiceToZain,
+            Total_CMC_Tax_Amount: totalTax,
+            Zain_Net_Revenue: totalNetZain,
+            Date: reportDate,
+          },
+        });
+        console.log("Record inserted successfully.");
+      } else {
+        console.log("Record with this date already exists. Insertion skipped.");
+      }
+    } else {
+      console.log("No data to insert; report date is null.");
+    }
+
     res.status(200).json({
       message: "Excel file generated and saved successfully.",
       path: filePath,
       data: result,
-      "total Gross Revenue": formatAccounting(totalGrossRevenue), // Return total gross revenue
-      total_invoice_to_zain: formatAccounting(totalInvoiceToZain), // Return total invoice to Zain (Net Bawaba)
-      total_Net_Zain_per_all_services: formatAccounting(totalNetZain), // Return the total Net Zain for all services
-      total_tax: formatAccounting(totalTax), // Return the total CMS tax across all services
+      "total Gross Revenue": formatAccounting(totalGrossRevenue),
+      total_invoice_to_zain: formatAccounting(totalInvoiceToZain),
+      total_Net_Zain_per_all_services: formatAccounting(totalNetZain),
+      total_tax: formatAccounting(totalTax),
     });
   } catch (error) {
     console.error(error);
@@ -255,6 +253,32 @@ router.get("/v1/getshare", async (req, res) => {
     res.status(200).json({ total_services2, totalCount });
   } catch (error) {
     res.status(500).json({ error: "Error fetching data" });
+  }
+});
+
+router.get("/v1/monthly_statistic", async (req, res) => {
+  try {
+    const monthly_statistic = await prisma.monthly_statistic.findMany();
+
+    if (monthly_statistic.length === 0) {
+      return res.status(404).json({ message: "No data found" });
+    }
+
+    const lastStatistic = monthly_statistic[monthly_statistic.length - 1];
+
+    // Format the values in the response
+    const formattedLastStatistic = {
+      id: lastStatistic.id,
+      Total_Gross_Revenue: formatAccounting(lastStatistic.Total_Gross_Revenue),
+      Total_Invoice_to_Zain: formatAccounting(lastStatistic.Total_Invoice_to_Zain),
+      Total_CMC_Tax_Amount: formatAccounting(lastStatistic.Total_CMC_Tax_Amount),
+      Zain_Net_Revenue: formatAccounting(lastStatistic.Zain_Net_Revenue),
+      Date: lastStatistic.Date,
+    };
+
+    res.status(200).json({ monthly_statistic: formattedLastStatistic });
+  } catch (error) {
+    res.status(500).json({ message: "Error retrieving data", error });
   }
 });
 
