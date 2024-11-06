@@ -2,9 +2,10 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const { PDFDocument, rgb } = require("pdf-lib");
 const ExcelJS = require("exceljs");
 const path = require("path");
-const fs = require("fs");
+const fs = require("fs").promises;
 const bodyParser = require("body-parser");
 const csv = require("csv-parser");
 router.use(bodyParser.json());
@@ -106,7 +107,6 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       Date: entry.Date,
     }));
 
-    // Save results to Excel
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Revenue Data");
 
@@ -321,11 +321,11 @@ router.get("/v1/monthYearOptions", async (req, res) => {
       select: {
         Date: true,
       },
-      distinct: ['Date'],
+      distinct: ["Date"],
     });
 
     // Create a unique set of formatted options
-    const uniqueDates = [...new Set(monthYearOptions.map(option => option.Date))];
+    const uniqueDates = [...new Set(monthYearOptions.map((option) => option.Date))];
 
     res.json(uniqueDates);
   } catch (error) {
@@ -334,5 +334,107 @@ router.get("/v1/monthYearOptions", async (req, res) => {
   }
 });
 
+router.get("/v1/financial-data", async (req, res) => {
+  try {
+    const financial_data = await prisma.monthly_statistic.findMany();
+    if (!financial_data) {
+      return res.status(200).json({ success: false });
+    } else {
+      const formattedStatistic = financial_data.map((entry) => ({
+        id: entry.id,
+        Total_Gross_Revenue: formatAccounting(entry.Total_Gross_Revenue),
+        Total_Invoice_to_Zain: formatAccounting(entry.Total_Invoice_to_Zain),
+        Total_CMC_Tax_Amount: formatAccounting(entry.Total_CMC_Tax_Amount),
+        Zain_Net_Revenue: formatAccounting(entry.Zain_Net_Revenue),
+        Date: entry.Date,
+      }));
+
+      return res.status(200).json({ success: true, data: formattedStatistic });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Server Error");
+  }
+});
+
+const util = require("util");
+const { log } = require("console");
+const writeFile = util.promisify(fs.writeFile);
+
+async function generateInvoicePDF(invoiceData) {
+  try {
+    const templatePath = path.join(__dirname, "image.png");
+    const templateImage = await fs.readFile(templatePath);
+
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595, 842]);
+
+    const image = await pdfDoc.embedPng(templateImage);
+    const { width, height } = image.scale(1);
+    page.drawImage(image, { x: 0, y: 0, width, height });
+
+    const { invoiceNumber, invoiceDate, alBawabaShare, totalRevenue, tax, zainShare } =
+      invoiceData;
+    page.drawText(`Invoice #: ${invoiceNumber}`, {
+      x: 450,
+      y: 780,
+      size: 12,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText(`Invoice Date: ${invoiceDate}`, {
+      x: 450,
+      y: 760,
+      size: 12,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText(`AL-BAWABA share: ${alBawabaShare}`, {
+      x: 50,
+      y: 700,
+      size: 12,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText(`Total Revenue: ${totalRevenue}`, {
+      x: 50,
+      y: 680,
+      size: 12,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText(`19.5% Tax: ${tax}`, { x: 50, y: 660, size: 12, color: rgb(0, 0, 0) });
+    page.drawText(`Zain share: ${zainShare}`, {
+      x: 50,
+      y: 640,
+      size: 12,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText(`Total: ${totalRevenue - tax - alBawabaShare - zainShare}`, {
+      x: 50,
+      y: 620,
+      size: 12,
+      color: rgb(0, 0, 0),
+    });
+
+    const pdfBytes = await pdfDoc.save();
+    const outputPath = path.join(__dirname, `invoices/${invoiceNumber}.pdf`);
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, pdfBytes);
+
+    return pdfBytes;
+  } catch (error) {
+    console.error("Error in generateInvoicePDF:", error);
+    throw error;
+  }
+}
+
+router.post("/generate-invoice", async (req, res) => {
+  try {
+    const invoiceData = req.body;
+    const pdfBuffer = await generateInvoicePDF(invoiceData);
+    res.setHeader("Content-Type", "application/pdf");
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Error generating invoice:", error); // Log the error
+    res.status(500).send("Error generating invoice");
+  }
+});
 
 module.exports = router;

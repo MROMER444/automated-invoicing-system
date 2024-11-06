@@ -3,10 +3,15 @@ const app = express();
 const cors = require("cors");
 
 const invoiceController = require("./src/controllers/invoice");
+const register = require("./src/auth/register");
+const login = require("./src/auth/Login");
+
 app.use(cors());
 app.use(express.json());
 
 app.use("/api", invoiceController);
+app.use("/api", register);
+app.use("/api", login);
 
 const swaggerUi = require("swagger-ui-express");
 const swaggerDocument = require("./swagger-output.json");
