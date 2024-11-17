@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 const { PDFDocument, rgb } = require("pdf-lib");
 const ExcelJS = require("exceljs");
 const path = require("path");
-const fs = require("fs").promises;
+const fs = require("fs");
 const bodyParser = require("body-parser");
 const csv = require("csv-parser");
 router.use(bodyParser.json());
@@ -195,7 +195,7 @@ router.post("/v1/upload-csv", async (req, res) => {
   const results = [];
 
   fs.createReadStream(
-    "/Users/omer/Documents/my_pro/automated invoicing system/Aug-revcsv_with_date.csv"
+    "/Users/omer/Documents/my_pro/automated invoicing system/SPstotalrevenueSep2024.csv"
   )
     .pipe(csv())
     .on("headers", (headers) => {
@@ -316,7 +316,6 @@ router.get("/v1/filter_date", async (req, res) => {
 
 router.get("/v1/monthYearOptions", async (req, res) => {
   try {
-    // Fetch distinct dates by grouping
     const monthYearOptions = await prisma.monthly_statistic.findMany({
       select: {
         Date: true,
@@ -324,7 +323,6 @@ router.get("/v1/monthYearOptions", async (req, res) => {
       distinct: ["Date"],
     });
 
-    // Create a unique set of formatted options
     const uniqueDates = [...new Set(monthYearOptions.map((option) => option.Date))];
 
     res.json(uniqueDates);
@@ -432,7 +430,7 @@ router.post("/generate-invoice", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.send(pdfBuffer);
   } catch (error) {
-    console.error("Error generating invoice:", error); // Log the error
+    console.error("Error generating invoice:", error);
     res.status(500).send("Error generating invoice");
   }
 });

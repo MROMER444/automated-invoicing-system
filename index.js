@@ -18,4 +18,4 @@ const swaggerDocument = require("./swagger-output.json");
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 const PORT = process.env.PORT || 2000;
-app.listen(PORT, () => console.log("Listening on port", PORT));
+app.listen(PORT, () => console.log("🚀 Server Listening on port", PORT));
