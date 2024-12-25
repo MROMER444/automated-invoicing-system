@@ -21,7 +21,10 @@ model rev_share {
   id                  Int                   @id @default(autoincrement())
   Service_Name        String                @unique
   Zain_share          Float
+  Dizlee_share        Float @default(0.05)
   Bawaba_share        Float
+  Sp_share            Float @default(0)
+  Bawaba_PLUS_sp_shares Float @default(0.7)
   sp_monthly_rev_data sp_monthly_rev_data[]
 }
 

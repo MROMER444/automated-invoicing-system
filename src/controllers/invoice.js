@@ -43,6 +43,9 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
           select: {
             Zain_share: true,
             Bawaba_share: true,
+            Dizlee_share: true,
+            Sp_share: true,
+            Bawaba_PLUS_sp_shares: true,
           },
         },
       },
@@ -55,11 +58,25 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
     let totalTax = 0;
 
     data.forEach((item) => {
-      const { id, SP_Name, Service_Name, Total_Revenue, revShare, Date } = item;
+      const { 
+        id, 
+        SP_Name, 
+        Service_Name, 
+        Total_Revenue, 
+        revShare, 
+        Date 
+      } = item;
+
       const grossRevenue = parseFloat(Total_Revenue.replace(/[^0-9.-]+/g, "") || 0);
       totalGrossRevenue += grossRevenue;
 
       const key = `${SP_Name}-${Service_Name}`;
+
+      const zainShare = revShare?.Zain_share ?? 0.3;
+      const bawabaShare = revShare?.Bawaba_share ?? 0.7;
+      const dizzleShare = revShare?.Dizlee_share ?? 0.5;
+      const bawabaPlusSpShares = revShare?.Bawaba_PLUS_sp_shares ?? 0.7;
+      const SP_SHARE_GET =revShare?.Sp_share ?? 0;
 
       if (!revenueMap[key]) {
         revenueMap[key] = {
@@ -71,24 +88,44 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
           CMS_Tax_Amount: 0,
           Net_Zain: 0,
           Net_Bawaba: 0,
+          Net_Dizzle: 0,
+          Net_SP: 0,
           total_Net_Zain: 0,
-          Zain_share: revShare?.Zain_share ?? 0.3,
-          Bawaba_share: revShare?.Bawaba_share ?? 0.7,
+          Zain_share: zainShare,
+          Bawaba_share: bawabaShare,
+          Dizzle_share: dizzleShare,
+          Sp_share: SP_SHARE_GET,
           Date,
         };
       }
 
       revenueMap[key].Gross_Revenue += grossRevenue;
+      
       revenueMap[key].CMS_Tax_Amount = revenueMap[key].Gross_Revenue * 0.195;
-      revenueMap[key].Net_Revenue =
+      
+      revenueMap[key].Net_Revenue = 
         revenueMap[key].Gross_Revenue - revenueMap[key].CMS_Tax_Amount;
-      revenueMap[key].Net_Zain = revenueMap[key].Net_Revenue * revenueMap[key].Zain_share;
-      revenueMap[key].Net_Bawaba =
+
+      revenueMap[key].Net_Zain = 
+        revenueMap[key].Net_Revenue * revenueMap[key].Zain_share;
+      
+      const netBawabaBeforeShares = 
         revenueMap[key].Net_Revenue * revenueMap[key].Bawaba_share;
+      
+      revenueMap[key].Net_SP = 
+        netBawabaBeforeShares * revenueMap[key].Sp_share;
+
+      revenueMap[key].Net_Bawaba = 
+        netBawabaBeforeShares - revenueMap[key].Net_Dizzle - revenueMap[key].Net_SP;
+
+        revenueMap[key].Net_Dizzle = 
+      revenueMap[key].Net_Bawaba * revenueMap[key].Dizzle_share;
+
       revenueMap[key].total_Net_Zain += revenueMap[key].Net_Zain;
 
+
       totalNetZain += revenueMap[key].total_Net_Zain;
-      totalInvoiceToZain += revenueMap[key].Net_Bawaba;
+      totalInvoiceToZain += revenueMap[key].Net_Dizzle + revenueMap[key].Net_SP + revenueMap[key].Net_Bawaba;
       totalTax += revenueMap[key].CMS_Tax_Amount;
     });
 
@@ -100,9 +137,13 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       Net_Revenue: formatAccounting(entry.Net_Revenue),
       CMS_Tax_Amount: formatAccounting(entry.CMS_Tax_Amount),
       Net_Zain: formatAccounting(entry.Net_Zain),
+      Net_Dizzle: formatAccounting(entry.Net_Dizzle),
+      Net_SP: formatAccounting(entry.Net_SP),
       Net_Bawaba: formatAccounting(entry.Net_Bawaba),
       Zain_share: entry.Zain_share,
       Bawaba_share: entry.Bawaba_share,
+      Dizzle_share: entry.Dizzle_share,
+      SP_share: entry.Sp_share,
       total_Net_Zain: formatAccounting(entry.total_Net_Zain),
       Date: entry.Date,
     }));
@@ -115,13 +156,16 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       { header: "SP Name", key: "SP_Name", width: 20 },
       { header: "Service Name", key: "Service_Name", width: 20 },
       { header: "Gross Revenue", key: "Gross_Revenue", width: 20 },
-      { header: "Net Revenue", key: "Net_Revenue", width: 20 },
+      { header: "Net Revenue after Tax", key: "Net_Revenue", width: 20 },
       { header: "CMS Tax Amount", key: "CMS_Tax_Amount", width: 20 },
       { header: "Net Zain", key: "Net_Zain", width: 20 },
-      { header: "Net Bawaba", key: "Net_Bawaba", width: 20 },
+      { header: "Net Dizzle", key: "Net_Dizzle", width: 20 },
+      { header: "Net SP", key: "Net_SP", width: 20 },
+      { header: "Net revenue after zain share and CMC share", key: "Net_Bawaba", width: 20 },
       { header: "Zain Share", key: "Zain_share", width: 15 },
       { header: "Bawaba Share", key: "Bawaba_share", width: 15 },
-      { header: "Total Net Zain", key: "total_Net_Zain", width: 20 },
+      { header: "Dizzle Share", key: "Dizzle_share", width: 15 },
+      { header: "SP Share", key: "SP_share", width: 15 },
     ];
 
     worksheet.addRows(result);
@@ -171,6 +215,7 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
     console.error(error);
     res.status(500).json({ error: "An error occurred while generating the report." });
   }
+  
 });
 
 router.get("/v1/get-total_services", async (req, res) => {
@@ -195,7 +240,7 @@ router.post("/v1/upload-csv", async (req, res) => {
   const results = [];
 
   fs.createReadStream(
-    "/Users/omer/Documents/my_pro/automated invoicing system/SPstotalrevenueSep2024.csv"
+    "/Users/omer/Documents/my_pro/automated invoicing system/SPs total revenue Sep 2024.csv"
   )
     .pipe(csv())
     .on("headers", (headers) => {
@@ -249,13 +294,13 @@ router.post("/v1/upload-csv", async (req, res) => {
 router.get("/v1/getshare", async (req, res) => {
   const { skip = 0, take = 4 } = req.query;
   try {
-    const total_services2 = await prisma.rev_share.findMany({
+    const total_services = await prisma.rev_share.findMany({
       skip: Number(skip),
       take: Number(take),
     });
     const totalCount = await prisma.rev_share.count();
 
-    res.status(200).json({ total_services2, totalCount });
+    res.status(200).json({ total_services, totalCount });
   } catch (error) {
     res.status(500).json({ error: "Error fetching data" });
   }
@@ -422,17 +467,5 @@ async function generateInvoicePDF(invoiceData) {
     throw error;
   }
 }
-
-router.post("/generate-invoice", async (req, res) => {
-  try {
-    const invoiceData = req.body;
-    const pdfBuffer = await generateInvoicePDF(invoiceData);
-    res.setHeader("Content-Type", "application/pdf");
-    res.send(pdfBuffer);
-  } catch (error) {
-    console.error("Error generating invoice:", error);
-    res.status(500).send("Error generating invoice");
-  }
-});
 
 module.exports = router;
