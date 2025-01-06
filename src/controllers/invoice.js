@@ -58,13 +58,13 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
     let totalTax = 0;
 
     data.forEach((item) => {
-      const { 
-        id, 
-        SP_Name, 
-        Service_Name, 
-        Total_Revenue, 
-        revShare, 
-        Date 
+      const {
+        id,
+        SP_Name,
+        Service_Name,
+        Total_Revenue,
+        revShare,
+        Date
       } = item;
 
       const grossRevenue = parseFloat(Total_Revenue.replace(/[^0-9.-]+/g, "") || 0);
@@ -76,7 +76,7 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       const bawabaShare = revShare?.Bawaba_share ?? 0.7;
       const dizzleShare = revShare?.Dizlee_share ?? 0.5;
       const bawabaPlusSpShares = revShare?.Bawaba_PLUS_sp_shares ?? 0.7;
-      const SP_SHARE_GET =revShare?.Sp_share ?? 0;
+      const SP_SHARE_GET = revShare?.Sp_share ?? 0;
 
       if (!revenueMap[key]) {
         revenueMap[key] = {
@@ -100,26 +100,20 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
       }
 
       revenueMap[key].Gross_Revenue += grossRevenue;
-      
+
       revenueMap[key].CMS_Tax_Amount = revenueMap[key].Gross_Revenue * 0.195;
-      
-      revenueMap[key].Net_Revenue = 
-        revenueMap[key].Gross_Revenue - revenueMap[key].CMS_Tax_Amount;
 
-      revenueMap[key].Net_Zain = 
-        revenueMap[key].Net_Revenue * revenueMap[key].Zain_share;
-      
-      const netBawabaBeforeShares = 
-        revenueMap[key].Net_Revenue * revenueMap[key].Bawaba_share;
-      
-      revenueMap[key].Net_SP = 
-        netBawabaBeforeShares * revenueMap[key].Sp_share;
+      revenueMap[key].Net_Revenue = revenueMap[key].Gross_Revenue - revenueMap[key].CMS_Tax_Amount;
 
-      revenueMap[key].Net_Bawaba = 
-        netBawabaBeforeShares - revenueMap[key].Net_Dizzle - revenueMap[key].Net_SP;
+      revenueMap[key].Net_Zain = revenueMap[key].Net_Revenue * revenueMap[key].Zain_share;
 
-        revenueMap[key].Net_Dizzle = 
-      revenueMap[key].Net_Bawaba * revenueMap[key].Dizzle_share;
+      const netBawabaBeforeShares = revenueMap[key].Net_Revenue * revenueMap[key].Bawaba_share;
+
+      revenueMap[key].Net_SP = netBawabaBeforeShares * revenueMap[key].Sp_share;
+
+      revenueMap[key].Net_Bawaba = netBawabaBeforeShares - revenueMap[key].Net_Dizzle - revenueMap[key].Net_SP;
+      
+      revenueMap[key].Net_Dizzle = revenueMap[key].Net_Bawaba * revenueMap[key].Dizzle_share;
 
       revenueMap[key].total_Net_Zain += revenueMap[key].Net_Zain;
 
@@ -215,7 +209,7 @@ router.get("/v1/total_rev_per_sp_per_month", async (req, res) => {
     console.error(error);
     res.status(500).json({ error: "An error occurred while generating the report." });
   }
-  
+
 });
 
 router.get("/v1/get-total_services", async (req, res) => {
